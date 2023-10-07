@@ -5,6 +5,8 @@ import (
 	"fmt"
 	v1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
 
+	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
+
 	"cosmossdk.io/log"
 	"encoding/json"
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -44,6 +46,12 @@ func NewProposalHandler(
 // PrepareProposalHandler is the handler to be used for PrepareProposal.
 func (h *ProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHandler {
 	return func(ctx sdk.Context, req *abci.RequestPrepareProposal) (*abci.ResponsePrepareProposal, error) {
+		proposalTxs := req.Txs
+		fmt.Println("the requests in a block", len(proposalTxs))
+		//if len(proposalTxs) == 0 {
+		//	return &abci.ResponsePrepareProposal{Txs: req.Txs}, nil
+		//}
+
 		err := baseapp.ValidateVoteExtensions(ctx, h.valStore, req.Height, ctx.ChainID(), req.LocalLastCommit)
 		if err != nil {
 			return nil, err
@@ -51,21 +59,24 @@ func (h *ProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHandler {
 
 		h.logger.Info("PrepareProposal started")
 
-		proposalTxs := req.Txs
-		if len(proposalTxs) == 0 {
-			return &abci.ResponsePrepareProposal{Txs: req.Txs}, nil
-		}
-
 		if req.Height >= ctx.ConsensusParams().Abci.VoteExtensionsEnableHeight {
 			scoreWeightedAverage, err := h.computeScamIdentificationResults(ctx, req.LocalLastCommit)
-			if err != nil {
-				return nil, errors.New("failed to compute stake-weighted average score")
-			}
+			//TODO: doesn;t exist
+			//if err != nil {
+			//	return nil, errors.New("failed to compute stake-weighted average score")
+			//}
 
 			var scamProposalExt ScamProposalExtension
 			voteExtension := req.LocalLastCommit.Votes[0].VoteExtension
 			if err := json.Unmarshal(voteExtension, &scamProposalExt); err != nil {
-				return nil, fmt.Errorf("failed to unmrashal vote extension: %w", err)
+				fmt.Println("the requests in the end of a block", len(req.Txs))
+				return &abci.ResponsePrepareProposal{Txs: proposalTxs}, nil
+				//return nil, fmt.Errorf("failed to unmrashal vote extension: %w", err)
+			}
+
+			fmt.Println("the Scam Proposal", scamProposalExt)
+			if scamProposalExt.ScamPercent == 0 {
+				return &abci.ResponsePrepareProposal{Txs: req.Txs}, nil
 			}
 
 			injectedVoteExtTx := ScamProposalTx{
@@ -75,8 +86,8 @@ func (h *ProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHandler {
 				ExtendedCommitInfo: req.LocalLastCommit,
 			}
 
-			fmt.Println("injected vote ext tx", injectedVoteExtTx.HashedTitle, injectedVoteExtTx.Score, injectedVoteExtTx.Title)
-
+			fmt.Println("The current height", req.Height)
+			//fmt.Println("The injectedVoteExtTx score", injectedVoteExtTx.Score)
 			// NOTE: We use stdlib JSON encoding, but an application may choose to use
 			// a performant mechanism. This is for demo purposes only.
 			bz, err := json.Marshal(injectedVoteExtTx)
@@ -89,7 +100,12 @@ func (h *ProposalHandler) PrepareProposalHandler() sdk.PrepareProposalHandler {
 			// and store the canonical stake-weighted average prices.
 			proposalTxs = append(proposalTxs, bz)
 		}
+		//fmt.Println("proposalTxs", proposalTxs)
+
 		h.logger.Info("PrepareProposal finished")
+
+		fmt.Println("the requests in the end of a block", len(proposalTxs))
+		//fmt.Println("the requests in a block", len(proposalTxs))
 
 		return &abci.ResponsePrepareProposal{Txs: proposalTxs}, nil
 	}
@@ -130,7 +146,6 @@ func (h *ProposalHandler) ProcessProposalHandler() sdk.ProcessProposalHandler {
 
 func (h *ProposalHandler) PreBlocker(ctx sdk.Context, req *abci.RequestFinalizeBlock) (*sdk.ResponsePreBlock, error) {
 	h.logger.Info("PreBlocker started")
-
 	fmt.Println("PreBlocker Transactions", len(req.Txs))
 
 	res := &sdk.ResponsePreBlock{}
@@ -139,12 +154,20 @@ func (h *ProposalHandler) PreBlocker(ctx sdk.Context, req *abci.RequestFinalizeB
 		return res, nil
 	}
 
+	var proposalMsg govtypes.MsgSubmitProposal
+	if err := h.cdc.Unmarshal(req.Txs[0], &proposalMsg); err != nil {
+	}
+
+	fmt.Println("The SubmitProposalTx", proposalMsg)
+
 	var injectedVoteExtTx ScamProposalTx
 	//h.logger.Info("PreBlocker transactions", len(req.Txs))
-	if err := json.Unmarshal(req.Txs[1], &injectedVoteExtTx); err != nil {
+	if err := json.Unmarshal(req.Txs[len(req.Txs)-1], &injectedVoteExtTx); err != nil {
 		h.logger.Error("failed to decode injected vote extension tx", "err", err)
 		return res, nil
 	}
+
+	fmt.Println("scam Proposal tx", injectedVoteExtTx)
 
 	querier := govkeeper.NewQueryServer(&h.govKeeper)
 	resp, err := querier.Proposals(ctx, &v1.QueryProposalsRequest{})
@@ -191,6 +214,7 @@ func (h *ProposalHandler) computeScamIdentificationResults(ctx sdk.Context, ci a
 			// We used -1 because is outside our range of interested and will be ignored by the caller
 			return -1, err
 		}
+		fmt.Println("the Scam Proposal", scamPropExt)
 
 		totalStake += vote.Validator.Power
 		// Compute stake-weighted sum of the scamScore, i.e.

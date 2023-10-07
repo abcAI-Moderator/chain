@@ -53,6 +53,7 @@ func ComputeScoreBatchProposals(proposals []types.Proposal) ([]int64, []error) {
 
 func ComputeScoreProposal(proposal types.Proposal) (int64, error) {
 	truncate_limit_description := MAX_CHARACTERS - PROMPT_CHARACTERS_LENGTH - len(proposal.Title)
+	client := openai.NewClient("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")
 	resp, err := client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{

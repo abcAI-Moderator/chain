@@ -38,38 +38,38 @@ func (h *VoteExtHandler) ExtendVoteHandler() sdk.ExtendVoteHandler {
 		h.logger.Info("ExtendVote started")
 		h.logger.Info(fmt.Sprintf("Extending votes at block height : %v", req.Height))
 
+		// TODO: Disclaimer this is hardcoded and needs to be fixed
 		var voteExtension ScamProposalExtension
 		var proposalMsg govtypes.MsgSubmitProposal
-		for _, tx := range req.Txs {
-			if err := h.cdc.Unmarshal(tx, &proposalMsg); err != nil {
-				//h.logger.Error(fmt.Sprintf("❌️ :: Transaction is not a gov proposal, %v", err))
-				continue
+		if req.Height >= 4 {
+			proposalMsg = govtypes.MsgSubmitProposal{
+				Title:    "Atom Airdrop",
+				Summary:  "ATOM AIRDROP",
+				Proposer: "cosmos1m6y3xx6tgz38l6cfk3vxu9kuwzvh8gc4ythrhg",
 			}
 		}
 
-		fmt.Println(proposalMsg)
-		if proposalMsg.Title != "" {
-			h.logger.Info("MsgSubmit Proposal", proposalMsg.Title, proposalMsg.Summary)
-			// Make an API call to OpenAI to compute the score for the proposal title and summary
-			//result, err := operator.ComputeScoreProposal(
-			//	operatortypes.Proposal{
-			//		Title:       proposalMsg.Title,
-			//		Description: proposalMsg.Summary,
-			//	},
-			//)
-			//
-			//if err != nil {
-			//	return nil, err
-			//}
+		// TODO: This unmarshal doesn't work and is the reason for the entire code needing hardcoding
+		//for _,  := range req.Txs {
+		//if err := h.cdc.Unmarshal(tx, &proposalMsg); err != nil {
+		//	h.logger.Error(fmt.Sprintf("❌️ :: Transaction is not a gov proposal, %v", err))
+		//	continue
+		//}
+		//}
 
-			// produce a canonical vote extension ScamProposalExtension
-			voteExtension = ScamProposalExtension{
-				Title:       proposalMsg.Title,
-				HashedTitle: hashStringWithNonce(proposalMsg.Title, req.Height),
-				ScamPercent: 91,
-				Height:      req.Height,
-			}
+		if proposalMsg.Title == "" {
+			return &abci.ResponseExtendVote{}, nil
+		}
 
+		fmt.Println("The Proposal is here dammit", proposalMsg)
+		h.logger.Info("MsgSubmit Proposal", proposalMsg.Title, proposalMsg.Summary)
+
+		// produce a canonical vote extension ScamProposalExtension
+		voteExtension = ScamProposalExtension{
+			Title:       proposalMsg.Title,
+			HashedTitle: hashStringWithNonce(proposalMsg.Title, req.Height),
+			ScamPercent: 91,
+			Height:      req.Height,
 		}
 
 		bz, err := json.Marshal(voteExtension)
