@@ -70,3 +70,7 @@ It all happens in a two-blocks sequence:
 This is an example of a workflow of a scam proposal that fets published on-chain.
 
 ![Scam Proposal Workflow](figma-charts/scam-proposal-workflow.png)
+
+## Frontend
+
+[Here](https://github.com/abcAI-Moderator/app) you can find the frontend for this project!
